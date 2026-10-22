@@ -4,7 +4,6 @@ import models
 import schemas
 from database import engine, get_db
 
-# Crea las tablas en la base de datos si no existen
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Fintech NFC Backend", version="1.0.0")
@@ -15,12 +14,10 @@ def read_root():
 
 @app.post("/api/auth/login")
 def login_user(request: schemas.LoginRequest, db: Session = Depends(get_db)):
-    # Busca al usuario por su 'usuario' (username) o por su 'correo'
     db_user = db.query(models.User).filter(
         (models.User.usuario == request.username) | (models.User.correo == request.username)
     ).first()
     
-    # Valida si el usuario existe y si la contraseña coincide
     if not db_user or db_user.password_hash != request.password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
@@ -35,7 +32,6 @@ def login_user(request: schemas.LoginRequest, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Verifica si el usuario o correo ya se encuentran registrados
     existing_user = db.query(models.User).filter(
         (models.User.usuario == user.username) | (models.User.correo == user.correo)
     ).first()
@@ -46,16 +42,15 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
             detail="El usuario o el correo ya están registrados"
         )
     
-    # Crea el nuevo registro usando los campos exactos de tu tabla en Supabase
     new_user = models.User(
         usuario=user.username,
-        password_hash=user.password,  # Nota: Almacena en texto plano tal como lo configuraste en la base de datos
+        password_hash=user.password,
         nombre=user.nombre,
         apellido=user.apellido,
         correo=user.correo,
-        tipo_documento="V",          # Valor por defecto o ajústalo según tu UI
+        tipo_documento="V",
         numero_documento=user.cedula,
-        celular=""                   # Puedes agregarlo al formulario si lo requieres luego
+        celular=""
     )
     
     db.add(new_user)
