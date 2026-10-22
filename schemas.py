@@ -1,17 +1,25 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional
 
-class UserCreate(BaseModel):
-    email: EmailStr
+# --- Esquemas de Login ---
+class LoginRequest(BaseModel):
+    username: str
     password: str
-    nfc_card_id: Optional[str] = None
 
-class UserResponse(BaseModel):
-    id: int
-    email: EmailStr
-    nfc_card_id: Optional[str] = None
-    balance: float
-    is_active: bool
+class LoginResponse(BaseModel):
+    token: Optional[str] = None
+    message: Optional[str] = None
+    nombre: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+# --- Esquemas de Registro ---
+class UserCreate(BaseModel.model_config = { "protected_namespaces": () } if hasattr(BaseModel, "model_config") else {}): # type: ignore
+    nombre: str
+    apellido: str
+    correo: str
+    cedula: str
+    username: str
+    password: str
+
+class RegisterResponse(BaseModel):
+    message: Optional[str] = None
+    success: Optional[bool] = None
