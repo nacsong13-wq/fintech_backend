@@ -12,7 +12,7 @@ class LoginResponse(BaseModel):
     nombre: Optional[str] = None
 
 # --- Esquemas de Registro ---
-class UserCreate(BaseModel.model_config = { "protected_namespaces": () } if hasattr(BaseModel, "model_config") else {}): # type: ignore
+class UserCreate(BaseModel):
     nombre: str
     apellido: str
     correo: str
