@@ -3,14 +3,12 @@ import random
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from passlib.context import CryptContext
 from supabase import create_client, Client
 
-# Inicialización de FastAPI
 app = FastAPI(title="Fintech App Backend", version="1.0.0")
 
-# Configuración de CORS para permitir peticiones desde la app Android
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,21 +17,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuración de Hasher para contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Conexión a Supabase mediante variables de entorno
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
-# Cliente de Supabase
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ==========================================
-# MODELOS DE DATOS (PYDANTIC)
-# ==========================================
 
 class RegisterRequest(BaseModel):
     nombre: str
@@ -68,12 +59,7 @@ class RegisterResponse(BaseModel):
     message: str
     numero_cuenta: Optional[str] = None
 
-# ==========================================
-# FUNCIONES AUXILIARES
-# ==========================================
-
 def generar_numero_cuenta() -> str:
-    """Genera un número de cuenta único con el banco 0185 y 8 dígitos aleatorios."""
     sufijo = "".join([str(random.randint(0, 9)) for _ in range(8)])
     return f"0185-{sufijo[:4]}-{sufijo[4:]}"
 
@@ -83,24 +69,19 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-# ==========================================
-# RUTAS DE LA API
-# ==========================================
-
 @app.get("/")
 def read_root():
     return {"status": "online", "message": "API Fintech operando correctamente"}
 
-@app.post("/api/register", response_model=RegisterResponse)
+@app.post("/api/auth/register", response_model=RegisterResponse)
 def registrar_usuario(user: RegisterRequest):
     if not supabase:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error de configuración del servidor (Supabase no conectado)."
+            detail="Supabase no conectado."
         )
 
     try:
-        # 1. Verificar si el username o correo ya están registrados
         existe_usuario = supabase.table("usuarios").select("id").or_(
             f"username.eq.{user.username},correo.eq.{user.correo}"
         ).execute()
@@ -108,14 +89,12 @@ def registrar_usuario(user: RegisterRequest):
         if existe_usuario.data and len(existe_usuario.data) > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El nombre de usuario o correo ya se encuentra registrado."
+                detail="El usuario o correo ya existe."
             )
 
-        # 2. Generar el número de cuenta exclusivo del banco 0185
         nuevo_numero_cuenta = generar_numero_cuenta()
         hashed_pwd = hash_password(user.password)
 
-        # 3. Insertar nuevo usuario en la base de datos
         nuevo_registro = {
             "nombre": user.nombre,
             "apellido": user.apellido,
@@ -132,7 +111,7 @@ def registrar_usuario(user: RegisterRequest):
         if not response.data:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo completar el registro en la base de datos."
+                detail="Error al insertar en la base de datos."
             )
 
         return RegisterResponse(
@@ -146,19 +125,18 @@ def registrar_usuario(user: RegisterRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno en el servidor: {str(e)}"
+            detail=str(e)
         )
 
-@app.post("/api/login", response_model=LoginResponse)
+@app.post("/api/auth/login", response_model=LoginResponse)
 def iniciar_sesion(credenciales: LoginRequest):
     if not supabase:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error de configuración del servidor (Supabase no conectado)."
+            detail="Supabase no conectado."
         )
 
     try:
-        # 1. Buscar usuario por username o correo
         respuesta = supabase.table("usuarios").select("*").or_(
             f"username.eq.{credenciales.username},correo.eq.{credenciales.username}"
         ).execute()
@@ -172,14 +150,12 @@ def iniciar_sesion(credenciales: LoginRequest):
 
         usuario = usuarios[0]
 
-        # 2. Verificar contraseña
         if not verify_password(credenciales.password, usuario.get("password_hash", "")):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Credenciales incorrectas."
             )
 
-        # 3. Obtener tarjetas del usuario si existen
         tarjetas_db = []
         try:
             tarjetas_resp = supabase.table("tarjetas").select("*").eq("usuario_id", usuario["id"]).execute()
@@ -214,5 +190,5 @@ def iniciar_sesion(credenciales: LoginRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error procesando el inicio de sesión: {str(e)}"
+            detail=str(e)
         )
