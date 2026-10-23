@@ -31,7 +31,7 @@ class RegisterRequest(BaseModel):
     apellido: str
     correo: str
     cedula: str
-    celular: str
+    celular: Optional[str] = ""
     username: str
     password: str
 
@@ -80,7 +80,7 @@ def registrar_usuario(user: RegisterRequest):
         raise HTTPException(status_code=500, detail="Supabase no conectado.")
 
     try:
-        check_user = supabase.table("usuarios").select("id").eq("user", user.username).execute()
+        check_user = supabase.table("usuarios").select("id").eq("username", user.username).execute()
         if check_user.data and len(check_user.data) > 0:
             raise HTTPException(status_code=400, detail="El nombre de usuario ya se encuentra registrado.")
 
@@ -101,8 +101,8 @@ def registrar_usuario(user: RegisterRequest):
             "correo": user.correo,
             "tipo_documento": tipo_doc,
             "numero_documento": num_doc,
-            "celular": user.celular,
-            "user": user.username,
+            "celular": user.celular or "",
+            "username": user.username,
             "password_hash": hashed_pwd,
             "numero_cuenta": nuevo_numero_cuenta,
             "saldo_disponible": 0.0
@@ -122,7 +122,7 @@ def registrar_usuario(user: RegisterRequest):
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error en registro: {str(e)}")
 
 @app.post("/api/auth/login", response_model=LoginResponse)
 def iniciar_sesion(credenciales: LoginRequest):
@@ -130,11 +130,13 @@ def iniciar_sesion(credenciales: LoginRequest):
         raise HTTPException(status_code=500, detail="Supabase no conectado.")
 
     try:
-        respuesta = supabase.table("usuarios").select("*").or_(
-            f"user.eq.{credenciales.username},correo.eq.{credenciales.username}"
-        ).execute()
-
+        respuesta = supabase.table("usuarios").select("*").eq("username", credenciales.username).execute()
         usuarios = respuesta.data
+
+        if not usuarios or len(usuarios) == 0:
+            respuesta_correo = supabase.table("usuarios").select("*").eq("correo", credenciales.username).execute()
+            usuarios = respuesta_correo.data
+
         if not usuarios or len(usuarios) == 0:
             raise HTTPException(status_code=401, detail="Credenciales incorrectas.")
 
@@ -148,7 +150,7 @@ def iniciar_sesion(credenciales: LoginRequest):
         return LoginResponse(
             token="bearer_token_simulado",
             message="Inicio de sesión exitoso.",
-            nombre=nombre_completo if nombre_completo else usuario.get("user", "Usuario"),
+            nombre=nombre_completo if nombre_completo else usuario.get("username", "Usuario"),
             numero_cuenta=usuario.get("numero_cuenta", "0185-0000-0000"),
             saldo_disponible=float(usuario.get("saldo_disponible", 0.0)),
             tarjetas=[]
@@ -156,4 +158,4 @@ def iniciar_sesion(credenciales: LoginRequest):
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error en login: {str(e)}")
