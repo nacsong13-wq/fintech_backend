@@ -122,7 +122,8 @@ def registrar_usuario(user: RegisterRequest):
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en registro: {str(e)}")
+        # Esto te mostrará el error exacto que viene de Supabase o Python
+        raise HTTPException(status_code=500, detail=f"ERROR REAL REGISTRO: {str(e)}")
 
 @app.post("/api/auth/login", response_model=LoginResponse)
 def iniciar_sesion(credenciales: LoginRequest):
@@ -158,4 +159,5 @@ def iniciar_sesion(credenciales: LoginRequest):
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en login: {str(e)}")
+        # Esto te mostrará el error exacto que viene de Supabase o Python
+        raise HTTPException(status_code=500, detail=f"ERROR REAL LOGIN: {str(e)}")
