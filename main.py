@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext
-from supabase import create_client, Client
+from sqlalchemy import create_engine, text
 
 app = FastAPI(title="Fintech App Backend", version="1.0.0")
 
@@ -19,12 +19,22 @@ app.add_middleware(
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+# Lectura de variables de entorno directas de PostgreSQL (configuradas en Render)
+DB_USER = os.getenv("user", "")
+DB_PASSWORD = os.getenv("password", "")
+DB_HOST = os.getenv("host", "")
+DB_PORT = os.getenv("port", "5432")
+DB_NAME = os.getenv("dbname", "postgres")
 
-supabase: Client = None
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Construcción de la URL de conexión para SQLAlchemy
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+engine = None
+if DB_USER and DB_PASSWORD and DB_HOST:
+    try:
+        engine = create_engine(DATABASE_URL)
+    except Exception as e:
+        print(f"Error al inicializar el engine de SQLAlchemy: {e}")
 
 class RegisterRequest(BaseModel):
     nombre: str
@@ -81,60 +91,72 @@ def read_root():
 
 @app.get("/api/test-db")
 def test_db_connection():
-    if not supabase:
-        return {"status": "error", "message": "Cliente de Supabase no inicializado (faltan variables de entorno SUPABASE_URL o SUPABASE_KEY en Render)."}
+    if not engine:
+        return {"status": "error", "message": "Motor de base de datos no inicializado (faltan variables de entorno user, password, host, etc.)."}
     try:
-        response = supabase.table("usuarios").select("id, username, correo").limit(5).execute()
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT id, username, correo FROM usuarios LIMIT 5;"))
+            rows = [dict(row._mapping) for row in result]
         return {
             "status": "success",
-            "message": "¡Comunicación exitosa entre Render y Supabase!",
-            "registros_encontrados": response.data
+            "message": "¡Comunicación exitosa con PostgreSQL (Supabase)!",
+            "registros_encontrados": rows
         }
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Error al comunicarse con Supabase: {str(e)}"
+            "message": f"Error al comunicarse con la base de datos: {str(e)}"
         }
 
 @app.post("/api/auth/register", response_model=RegisterResponse)
 def registrar_usuario(user: RegisterRequest):
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase no conectado.")
+    if not engine:
+        raise HTTPException(status_code=500, detail="Base de datos no conectada.")
 
     try:
-        check_user = supabase.table("usuarios").select("id").eq("username", user.username).execute()
-        if check_user.data and len(check_user.data) > 0:
-            raise HTTPException(status_code=400, detail="El nombre de usuario ya se encuentra registrado.")
+        with engine.connect() as connection:
+            # Verificar si el username ya existe
+            check_user = connection.execute(
+                text("SELECT id FROM usuarios WHERE username = :username"),
+                {"username": user.username}
+            .fetchone()
+            if check_user:
+                raise HTTPException(status_code=400, detail="El nombre de usuario ya se encuentra registrado.")
 
-        check_email = supabase.table("usuarios").select("id").eq("correo", user.correo).execute()
-        if check_email.data and len(check_email.data) > 0:
-            raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
+            # Verificar si el correo ya existe
+            check_email = connection.execute(
+                text("SELECT id FROM usuarios WHERE correo = :correo"),
+                {"correo": user.correo}
+            ).fetchone()
+            if check_email:
+                raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
 
-        nuevo_numero_cuenta = generar_numero_cuenta()
-        hashed_pwd = hash_password(user.password)
+            nuevo_numero_cuenta = generar_numero_cuenta()
+            hashed_pwd = hash_password(user.password)
 
-        partes_cedula = user.cedula.split("-")
-        tipo_doc = partes_cedula[0] if len(partes_cedula) > 1 else "V"
-        num_doc = partes_cedula[1] if len(partes_cedula) > 1 else user.cedula
+            partes_cedula = user.cedula.split("-")
+            tipo_doc = partes_cedula[0] if len(partes_cedula) > 1 else "V"
+            num_doc = partes_cedula[1] if len(partes_cedula) > 1 else user.cedula
 
-        nuevo_registro = {
-            "nombre": user.nombre,
-            "apellido": user.apellido,
-            "correo": user.correo,
-            "tipo_documento": tipo_doc,
-            "numero_documento": num_doc,
-            "celular": user.celular or "",
-            "username": user.username,
-            "password_hash": hashed_pwd,
-            "numero_cuenta": nuevo_numero_cuenta,
-            "saldo_disponible": 0.0,
-            "verificado": False
-        }
+            insert_query = text("""
+                INSERT INTO usuarios (nombre, apellido, correo, tipo_documento, numero_documento, celular, username, password_hash, numero_cuenta, saldo_disponible, verificado)
+                VALUES (:nombre, :apellido, :correo, :tipo_documento, :numero_documento, :celular, :username, :password_hash, :numero_cuenta, :saldo_disponible, :verificado)
+            """)
 
-        response = supabase.table("usuarios").insert(nuevo_registro).execute()
-
-        if not response.data:
-            raise HTTPException(status_code=500, detail="No se pudo guardar el usuario en la base de datos.")
+            connection.execute(insert_query, {
+                "nombre": user.nombre,
+                "apellido": user.apellido,
+                "correo": user.correo,
+                "tipo_documento": tipo_doc,
+                "numero_documento": num_doc,
+                "celular": user.celular or "",
+                "username": user.username,
+                "password_hash": hashed_pwd,
+                "numero_cuenta": nuevo_numero_cuenta,
+                "saldo_disponible": 0.0,
+                "verificado": False
+            })
+            connection.commit()
 
         return RegisterResponse(
             success=True,
@@ -149,21 +171,28 @@ def registrar_usuario(user: RegisterRequest):
 
 @app.post("/api/auth/login", response_model=LoginResponse)
 def iniciar_sesion(credenciales: LoginRequest):
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase no conectado.")
+    if not engine:
+        raise HTTPException(status_code=500, detail="Base de datos no conectada.")
 
     try:
-        respuesta = supabase.table("usuarios").select("*").eq("username", credenciales.username).execute()
-        usuarios = respuesta.data
+        with engine.connect() as connection:
+            # Buscar por username
+            result = connection.execute(
+                text("SELECT * FROM usuarios WHERE username = :val"),
+                {"val": credenciales.username}
+            ).fetchone()
 
-        if not usuarios or len(usuarios) == 0:
-            respuesta_correo = supabase.table("usuarios").select("*").eq("correo", credenciales.username).execute()
-            usuarios = respuesta_correo.data
+            # Si no se encuentra por username, buscar por correo
+            if not result:
+                result = connection.execute(
+                    text("SELECT * FROM usuarios WHERE correo = :val"),
+                    {"val": credenciales.username}
+                ).fetchone()
 
-        if not usuarios or len(usuarios) == 0:
-            raise HTTPException(status_code=401, detail="Credenciales incorrectas.")
+            if not result:
+                raise HTTPException(status_code=401, detail="Credenciales incorrectas.")
 
-        usuario = usuarios[0]
+            usuario = dict(result._mapping)
 
         if not verify_password(credenciales.password, usuario.get("password_hash") or ""):
             raise HTTPException(status_code=401, detail="Credenciales incorrectas.")
