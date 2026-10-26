@@ -122,7 +122,6 @@ def registrar_usuario(user: RegisterRequest):
     except HTTPException as he:
         raise he
     except Exception as e:
-        # Esto te mostrará el error exacto que viene de Supabase o Python
         raise HTTPException(status_code=500, detail=f"ERROR REAL REGISTRO: {str(e)}")
 
 @app.post("/api/auth/login", response_model=LoginResponse)
@@ -143,21 +142,27 @@ def iniciar_sesion(credenciales: LoginRequest):
 
         usuario = usuarios[0]
 
-        if not verify_password(credenciales.password, usuario.get("password_hash", "")):
+        if not verify_password(credenciales.password, usuario.get("password_hash") or ""):
             raise HTTPException(status_code=401, detail="Credenciales incorrectas.")
 
-        nombre_completo = f"{usuario.get('nombre', '')} {usuario.get('apellido', '')}".strip()
+        nombre_val = usuario.get("nombre") or ""
+        apellido_val = usuario.get("apellido") or ""
+        nombre_completo = f"{nombre_val} {apellido_val}".strip()
+
+        saldo_raw = usuario.get("saldo_disponible")
+        saldo_num = float(saldo_raw) if saldo_raw is not None else 0.0
+
+        num_cuenta = usuario.get("numero_cuenta") or "0185-0000-0000"
 
         return LoginResponse(
             token="bearer_token_simulado",
             message="Inicio de sesión exitoso.",
-            nombre=nombre_completo if nombre_completo else usuario.get("username", "Usuario"),
-            numero_cuenta=usuario.get("numero_cuenta", "0185-0000-0000"),
-            saldo_disponible=float(usuario.get("saldo_disponible", 0.0)),
+            nombre=nombre_completo if nombre_completo else (usuario.get("username") or "Usuario"),
+            numero_cuenta=num_cuenta,
+            saldo_disponible=saldo_num,
             tarjetas=[]
         )
     except HTTPException as he:
         raise he
     except Exception as e:
-        # Esto te mostrará el error exacto que viene de Supabase o Python
         raise HTTPException(status_code=500, detail=f"ERROR REAL LOGIN: {str(e)}")
