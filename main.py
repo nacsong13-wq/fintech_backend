@@ -99,7 +99,7 @@ def test_db_connection():
             rows = [dict(row._mapping) for row in result]
         return {
             "status": "success",
-            "message": "¡Comunicación exitosa con PostgreSQL (Supabase)!",
+            "message": "¡Comunicación exitosa con PostgreSQL!",
             "registros_encontrados": rows
         }
     except Exception as e:
@@ -119,7 +119,7 @@ def registrar_usuario(user: RegisterRequest):
             check_user = connection.execute(
                 text("SELECT id FROM usuarios WHERE username = :username"),
                 {"username": user.username}
-            .fetchone()
+            ).fetchone()
             if check_user:
                 raise HTTPException(status_code=400, detail="El nombre de usuario ya se encuentra registrado.")
 
