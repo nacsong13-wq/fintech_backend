@@ -68,7 +68,13 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        # Si la contraseña en BD es texto plano antiguo, compárala directamente
+        if not hashed_password.startswith("$"):
+            return plain_password == hashed_password
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return plain_password == hashed_password
 
 @app.get("/")
 def read_root():
@@ -105,7 +111,8 @@ def registrar_usuario(user: RegisterRequest):
             "username": user.username,
             "password_hash": hashed_pwd,
             "numero_cuenta": nuevo_numero_cuenta,
-            "saldo_disponible": 0.0
+            "saldo_disponible": 0.0,
+            "verificado": False
         }
 
         response = supabase.table("usuarios").insert(nuevo_registro).execute()
