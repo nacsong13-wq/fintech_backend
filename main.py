@@ -229,7 +229,6 @@ def logica_login(credenciales: LoginRequest):
             tarjetas=[]
         )
 
-# Endpoints múltiples para evitar cualquier 404 (soporta /api/login, /api/auth/login, etc.)
 @app.post("/api/register", response_model=RegisterResponse)
 def registrar_usuario_1(user: RegisterRequest):
     return logica_registro(user)
@@ -245,9 +244,3 @@ def iniciar_sesion_1(credenciales: LoginRequest):
 @app.post("/api/auth/login", response_model=LoginResponse)
 def iniciar_sesion_2(credenciales: LoginRequest):
     return logica_login(credenciales)
-```[cite: 2]
-
-### Próximos pasos:
-1. Reemplaza el contenido de tu archivo `main.py` con este código[cite: 2].
-2. Guarda los cambios y súbelos a tu repositorio mediante Git para que **Render** actualice el servidor automáticamente (`git add main.py`, `git commit -m "Añadir endpoint tasas bcv"`, `git push`).
-3. Una vez desplegado, al abrir tu app Android o visitar la ruta `/api/tasas-bcv` en tu navegador, obtendrás los datos correctos sincronizados.
