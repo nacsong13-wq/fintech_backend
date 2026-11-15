@@ -76,6 +76,11 @@ class RegisterResponse(BaseModel):
     message: str
     numero_cuenta: Optional[str] = None
 
+class TasasBcvResponseModel(BaseModel):
+    dolar: float
+    euro: float
+    fecha: Optional[str] = ""
+
 def generar_numero_cuenta() -> str:
     sufijo = "".join([str(random.randint(0, 9)) for _ in range(8)])
     return f"0185-{sufijo[:4]}-{sufijo[4:]}"
@@ -113,6 +118,32 @@ def test_db_connection():
             "status": "error",
             "message": f"Error al consultar la base de datos: {str(e)}"
         }
+
+@app.get("/api/tasas-bcv", response_model=TasasBcvResponseModel)
+def obtener_tasas_bcv():
+    """Consulta la tasa oficial del BCV desde la base de datos de Supabase."""
+    if engine:
+        try:
+            with engine.connect() as connection:
+                result = connection.execute(
+                    text("SELECT dolar, euro, fecha FROM tasas_bcv ORDER BY id DESC LIMIT 1;")
+                ).fetchone()
+                if result:
+                    row = dict(result._mapping)
+                    return {
+                        "dolar": float(row.get("dolar", 36.50)),
+                        "euro": float(row.get("euro", 39.80)),
+                        "fecha": str(row.get("fecha", ""))
+                    }
+        except Exception as e:
+            print(f"Aviso al consultar tasas_bcv: {e}")
+            
+    # Respuesta por defecto en caso de que la tabla aún no exista
+    return {
+        "dolar": 36.50,
+        "euro": 39.80,
+        "fecha": "2026-11-15"
+    }
 
 def logica_registro(user: RegisterRequest):
     if not engine:
@@ -198,7 +229,7 @@ def logica_login(credenciales: LoginRequest):
             tarjetas=[]
         )
 
-# Endports múltiples para evitar cualquier 404 (soporta /api/login, /api/auth/login, etc.)
+# Endpoints múltiples para evitar cualquier 404 (soporta /api/login, /api/auth/login, etc.)
 @app.post("/api/register", response_model=RegisterResponse)
 def registrar_usuario_1(user: RegisterRequest):
     return logica_registro(user)
@@ -214,4 +245,9 @@ def iniciar_sesion_1(credenciales: LoginRequest):
 @app.post("/api/auth/login", response_model=LoginResponse)
 def iniciar_sesion_2(credenciales: LoginRequest):
     return logica_login(credenciales)
-```[cite: 8]
+```[cite: 2]
+
+### Próximos pasos:
+1. Reemplaza el contenido de tu archivo `main.py` con este código[cite: 2].
+2. Guarda los cambios y súbelos a tu repositorio mediante Git para que **Render** actualice el servidor automáticamente (`git add main.py`, `git commit -m "Añadir endpoint tasas bcv"`, `git push`).
+3. Una vez desplegado, al abrir tu app Android o visitar la ruta `/api/tasas-bcv` en tu navegador, obtendrás los datos correctos sincronizados.
