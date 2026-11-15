@@ -133,6 +133,11 @@ def obtener_tasas_bcv():
     euro_val = 39.80
     fecha_val = ""
 
+    def limpiar_monto_bcv(texto: str) -> float:
+        # Elimina separadores de miles (.) y convierte la coma decimal (,) en punto (.)
+        limpio = texto.strip().replace('.', '').replace(',', '.')
+        return float(limpio)
+
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -140,37 +145,22 @@ def obtener_tasas_bcv():
         response = requests.get(url, headers=headers, timeout=10, verify=False)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # 1. Extraer Dólar
+
+            # Extraer Dólar
             div_dolar = soup.find('div', id='dolar')
             if div_dolar:
                 strong_dolar = div_dolar.find('strong')
                 if strong_dolar:
-                    texto_dolar = strong_dolar.text.strip().replace(',', '.')
-                    dolar_val = float(texto_dolar)
+                    dolar_val = limpiar_monto_bcv(strong_dolar.text)
 
-            # 2. Extraer Euro (Búsqueda robusta por ID o por texto contenedor)
+            # Extraer Euro
             div_euro = soup.find('div', id='euro')
             if div_euro:
                 strong_euro = div_euro.find('strong')
                 if strong_euro:
-                    texto_euro = strong_euro.text.strip().replace(',', '.')
-                    euro_val = float(texto_euro)
-            else:
-                # Recorre los divs buscando la referencia al euro de forma dinámica
-                for div in soup.find_all('div'):
-                    if 'euro' in div.text.lower():
-                        strong_tag = div.find('strong')
-                        if strong_tag:
-                            try:
-                                val = float(strong_tag.text.strip().replace(',', '.'))
-                                if val > 30:  # Asegurar que sea una tasa real y no un texto menor
-                                    euro_val = val
-                                    break
-                            except ValueError:
-                                pass
+                    euro_val = limpiar_monto_bcv(strong_euro.text)
 
-            # 3. Extraer Fecha si está disponible
+            # Extraer Fecha
             div_fecha = soup.find('span', class_='date-display-single')
             if div_fecha:
                 fecha_val = div_fecha.text.strip()
