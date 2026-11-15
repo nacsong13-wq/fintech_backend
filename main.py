@@ -7,6 +7,12 @@ from pydantic import BaseModel
 from passlib.context import CryptContext
 from supabase import create_client, Client
 from sqlalchemy import create_engine, text
+import requests
+from bs4 import BeautifulSoup
+import urllib3
+
+# Desactivar advertencias de SSL por si el certificado del BCV presenta detalles en Render
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = FastAPI(title="Fintech App Backend", version="1.0.0")
 
@@ -121,28 +127,48 @@ def test_db_connection():
 
 @app.get("/api/tasas-bcv", response_model=TasasBcvResponseModel)
 def obtener_tasas_bcv():
-    """Consulta la tasa oficial del BCV desde la base de datos de Supabase."""
-    if engine:
-        try:
-            with engine.connect() as connection:
-                result = connection.execute(
-                    text("SELECT dolar, euro, fecha FROM tasas_bcv ORDER BY id DESC LIMIT 1;")
-                ).fetchone()
-                if result:
-                    row = dict(result._mapping)
-                    return {
-                        "dolar": float(row.get("dolar", 36.50)),
-                        "euro": float(row.get("euro", 39.80)),
-                        "fecha": str(row.get("fecha", ""))
-                    }
-        except Exception as e:
-            print(f"Aviso al consultar tasas_bcv: {e}")
+    """Consulta la tasa oficial directamente haciendo scraping a la web del BCV."""
+    url = "https://www.bcv.org.ve/"
+    dolar_val = 36.50
+    euro_val = 39.80
+    fecha_val = ""
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=10, verify=False)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
             
-    # Respuesta por defecto en caso de que la tabla aún no exista
+            # Extraer Dólar
+            div_dolar = soup.find('div', id='dolar')
+            if div_dolar:
+                strong_dolar = div_dolar.find('strong')
+                if strong_dolar:
+                    texto_dolar = strong_dolar.text.strip().replace(',', '.')
+                    dolar_val = float(texto_dolar)
+
+            # Extraer Euro
+            div_euro = soup.find('div', id='euro')
+            if div_euro:
+                strong_euro = div_euro.find('strong')
+                if strong_euro:
+                    texto_euro = strong_euro.text.strip().replace(',', '.')
+                    euro_val = float(texto_euro)
+                    
+            # Extraer Fecha si está disponible
+            div_fecha = soup.find('span', class_='date-display-single')
+            if div_fecha:
+                fecha_val = div_fecha.text.strip()
+
+    except Exception as e:
+        print(f"Error al conectar con la web del BCV: {e}")
+
     return {
-        "dolar": 36.50,
-        "euro": 39.80,
-        "fecha": "2026-11-15"
+        "dolar": dolar_val,
+        "euro": euro_val,
+        "fecha": fecha_val
     }
 
 def logica_registro(user: RegisterRequest):
