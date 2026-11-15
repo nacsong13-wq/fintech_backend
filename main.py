@@ -270,3 +270,6 @@ def iniciar_sesion_1(credenciales: LoginRequest):
 @app.post("/api/auth/login", response_model=LoginResponse)
 def iniciar_sesion_2(credenciales: LoginRequest):
     return logica_login(credenciales)
+@app.post("/api/auth/login", response_model=LoginResponse)
+def iniciar_sesion_2(credenciales: LoginRequest):
+    return logica_login(credenciales)
