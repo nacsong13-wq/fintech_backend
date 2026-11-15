@@ -141,16 +141,22 @@ def obtener_tasas_bcv():
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Extraer Dólar
-            div_dolar = soup.find('div', id='dolar')
+            # Extraer Dólar (busca por id 'dolar' o variaciones)
+            div_dolar = soup.find('div', id='dolar') or soup.find('div', id='dol')
             if div_dolar:
                 strong_dolar = div_dolar.find('strong')
                 if strong_dolar:
                     texto_dolar = strong_dolar.text.strip().replace(',', '.')
                     dolar_val = float(texto_dolar)
 
-            # Extraer Euro
-            div_euro = soup.find('div', id='euro')
+            # Extraer Euro (busca por id 'euro', 'eur' o busca contenedores relacionados)
+            div_euro = soup.find('div', id='euro') or soup.find('div', id='eur')
+            if not div_euro:
+                for d in soup.find_all('div'):
+                    div_id = d.get('id')
+                    if div_id and ('euro' in div_id.lower() or 'eur' in div_id.lower()):
+                        div_euro = d
+                        break
             if div_euro:
                 strong_euro = div_euro.find('strong')
                 if strong_euro:
