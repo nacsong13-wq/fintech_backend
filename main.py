@@ -141,7 +141,7 @@ def obtener_tasas_bcv():
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 1. Extraer Dólar por ID o búsqueda genérica
+            # 1. Extraer Dólar
             div_dolar = soup.find('div', id='dolar')
             if div_dolar:
                 strong_dolar = div_dolar.find('strong')
@@ -149,7 +149,7 @@ def obtener_tasas_bcv():
                     texto_dolar = strong_dolar.text.strip().replace(',', '.')
                     dolar_val = float(texto_dolar)
 
-            # 2. Extraer Euro buscando el contenedor o texto correspondiente
+            # 2. Extraer Euro (Búsqueda robusta por ID o por texto contenedor)
             div_euro = soup.find('div', id='euro')
             if div_euro:
                 strong_euro = div_euro.find('strong')
@@ -157,22 +157,18 @@ def obtener_tasas_bcv():
                     texto_euro = strong_euro.text.strip().replace(',', '.')
                     euro_val = float(texto_euro)
             else:
-                # Búsqueda alternativa si el ID exacto cambia
-                for item in soup.find_all(['div', 'span']):
-                    if 'euro' in item.text.lower():
-                        # Intenta buscar un número flotante con formato de tasa al lado
-                        parent = item.parent
-                        if parent:
-                            strong_tag = parent.find('strong')
-                            if strong_tag:
-                                txt = strong_tag.text.strip().replace(',', '.')
-                                try:
-                                    val = float(txt)
-                                    if val > 10:  # Validar que sea una tasa real y no un índice
-                                        euro_val = val
-                                        break
-                                except ValueError:
-                                    pass
+                # Recorre los divs buscando la referencia al euro de forma dinámica
+                for div in soup.find_all('div'):
+                    if 'euro' in div.text.lower():
+                        strong_tag = div.find('strong')
+                        if strong_tag:
+                            try:
+                                val = float(strong_tag.text.strip().replace(',', '.'))
+                                if val > 30:  # Asegurar que sea una tasa real y no un texto menor
+                                    euro_val = val
+                                    break
+                            except ValueError:
+                                pass
 
             # 3. Extraer Fecha si está disponible
             div_fecha = soup.find('span', class_='date-display-single')
