@@ -11,7 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 import urllib3
 
-# Desactivar advertencias de SSL por si el certificado del BCV presenta detalles en Render
+# Desactivar advertencias de SSL para las peticiones al BCV
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = FastAPI(title="Fintech App Backend", version="1.0.0")
